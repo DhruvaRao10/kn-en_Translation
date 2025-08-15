@@ -1,6 +1,13 @@
 fastapi
 uvicorn
-torch
-opencv-python
-pytesseract
 python-multipart
+numpy
+transformers==4.35.0
+torch==2.1.0
+fastapi==0.104.1
+uvicorn==0.24.0
+huggingface_hub
+pydantic
+pydantic-settings   
+pydantic-core
+pydantic-settings
