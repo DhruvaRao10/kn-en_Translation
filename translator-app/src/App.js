@@ -6,7 +6,7 @@ import './App.css';
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL 
 
 function App() {
-  const [activeTab, setActiveTab] = useState('text');
+  const [activeTab] = useState('text');
   const [textInput, setTextInput] = useState('');
   const [translation, setTranslation] = useState(null);
   const [loading, setLoading] = useState(false);          
