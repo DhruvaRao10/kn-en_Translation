@@ -2,10 +2,10 @@ fastapi
 uvicorn
 python-multipart
 numpy
-transformers==4.35.0
-torch==2.1.0
-fastapi==0.104.1
-uvicorn==0.24.0
+transformers
+torch
+fastapi
+uvicorn
 huggingface_hub
 pydantic
 pydantic-settings   
