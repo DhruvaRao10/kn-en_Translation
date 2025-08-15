@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import cv2
 import numpy as np
-import pytesseract
 import tempfile
 import os
 from pydantic import BaseModel
