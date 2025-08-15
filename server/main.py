@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,10 +9,39 @@ from inference import (
 )
 import torch
 import uvicorn
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Translation api", version="1.0.0")
 
-# CORS middleware for React frontend
+translator = None
+translator_lock = threading.Lock()
+
+REPO_ID = "DrDrunkenstein22/mbart-kn-en-finetune"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global translator
+    try:
+        print("hf hub loading...")
+        translator = TranslationInference(
+            repo_id=REPO_ID,
+            device=DEVICE,
+        )
+        print("translation model loaded")
+    except Exception as e:
+        print(f"error loading model: {e}")
+        translator = None
+
+    yield  # This separates startup from shutdown
+
+    # Shutdown - Clean up resources if needed
+    print("Shutting down translation service...")
+    # Add any cleanup code here if needed
+
+
+app = FastAPI(title="Translation api", version="1.0.0", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -22,12 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-translator = None
-translator_lock = threading.Lock()
-
-REPO_ID = "DrDrunkenstein22/mbart-kn-en-finetune"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class TextTranslationRequest(BaseModel):
@@ -40,22 +63,6 @@ class TranslationResponse(BaseModel):
     translated_text: str
     success: bool
     error: Optional[str] = None
-
-
-# one time translator init
-@app.on_event("startup")
-async def startup_event():
-    global translator
-    try:
-        print("hf hub loading...")
-        translator = TranslationInference(
-            repo_id=REPO_ID,
-            device=DEVICE,
-        )
-        print(" translaation model loaded ")
-    except Exception as e:
-        print(f"error loading model: {e}")
-        translator = None
 
 
 @app.get("/")
