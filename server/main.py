@@ -33,11 +33,9 @@ async def lifespan(app: FastAPI):
         print(f"error loading model: {e}")
         translator = None
 
-    yield  # This separates startup from shutdown
+    yield
 
-    # Shutdown - Clean up resources if needed
     print("Shutting down translation service...")
-    # Add any cleanup code here if needed
 
 
 app = FastAPI(title="Translation api", version="1.0.0", lifespan=lifespan)
@@ -47,6 +45,7 @@ app.add_middleware(
     allow_origins=[
         # "http://localhost:3000",
         "https://kn-en-translation.vercel.app",
+        "https://*.vercel.app",
         "*",
     ],
     allow_credentials=True,
