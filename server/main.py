@@ -45,7 +45,8 @@ app = FastAPI(title="Translation api", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
+        # "http://localhost:3000",
+        "https://kn-en-translation.vercel.app/",
     ],
     allow_credentials=True,
     allow_methods=["*"],
