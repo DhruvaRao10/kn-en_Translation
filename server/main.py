@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         print(f"error loading model: {e}")
         translator = None
 
-    yield 
+    yield
     print("Shutting down translation service...")
 
 
@@ -42,11 +42,11 @@ app = FastAPI(title="Translation api", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # "http://localhost:3000",  
-        "https://kn-en-translation.vercel.app",  
-        "https://kn-en-translation-ca804k53s-dhruvabantwalrao-gmailcoms-projects.vercel.app",  
-        "https://*.vercel.app", 
-        "*",  
+        # "http://localhost:3000",
+        "https://kn-en-translation.vercel.app",
+        "https://kn-en-translation-ca804k53s-dhruvabantwalrao-gmailcoms-projects.vercel.app",
+        "https://*.vercel.app",
+        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -99,7 +99,3 @@ async def translate_text(request: TextTranslationRequest):
     return TranslationResponse(
         original_text=request.text, translated_text=translated, success=True
     )
-
-
-# if __name__ == "__main__":
-#     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
