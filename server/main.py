@@ -46,7 +46,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         # "http://localhost:3000",
-        "https://kn-en-translation.vercel.app/",
+        "https://kn-en-translation.vercel.app",
+        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],
