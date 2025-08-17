@@ -41,6 +41,9 @@ function App() {
     setError(null);
     setTranslation(null);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); 
+  
     try {
       const response = await fetch(`${API_BASE_URL}/translate/text`, {
         method: 'POST',
@@ -50,9 +53,11 @@ function App() {
         body: JSON.stringify({
           text: textInput,
           beam_size: 5
-        })
+        }),
+        signal: controller.signal 
       });
-
+  
+      clearTimeout(timeoutId); 
       const data = await response.json();
       
       if (data.success) {
@@ -61,12 +66,17 @@ function App() {
         setError(data.error || 'Translation failed');
       }
     } catch (err) {
-      setError('Network error. Please check if the server is running.');
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        setError('inference taking too long .... .');
+      } else {
+        setError('network error');
+      }
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
     <div className="app">
       <div className="container">
