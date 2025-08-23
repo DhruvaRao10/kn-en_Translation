@@ -5,8 +5,12 @@ import math
 from transformers import AutoTokenizer, AutoConfig
 from huggingface_hub import hf_hub_download
 from collections import OrderedDict
+import onnxruntime as ort
+import numpy as np
+import os
 
-# same model arch class instance 
+# same model arch class instance
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -249,16 +253,23 @@ class Seq2SeqTransformer(nn.Module):
 
 
 class TranslationInference:
-    def __init__(self, repo_id="DrDrunkenstein22/mbart-kn-en-finetune", device="cuda"):
+    def __init__(
+        self,
+        repo_id="DrDrunkenstein22/mbart-kn-en-finetune",
+        device="cuda",
+        use_onnx=True,
+    ):
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {self.device}")
+        self.use_onnx = use_onnx
+        self.onnx_session = None
+        self.onnx_model_path = "translation_model.onnx"
 
+        print(f"Using device: {self.device}")
         print(f"Loading tokenizer and model from '{repo_id}'...")
 
         self.tokenizer = AutoTokenizer.from_pretrained(repo_id)
         config = AutoConfig.from_pretrained(repo_id)
 
-        
         config.vocab_size = len(self.tokenizer)
 
         # set bos, eos token id
@@ -268,22 +279,111 @@ class TranslationInference:
             config.eos_token_id = self.tokenizer.eos_token_id
 
         self.model = Seq2SeqTransformer(config)
+        self.config = config
 
         weights_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
 
-        # fetching state dict
+        # Load model weights
         checkpoint = torch.load(weights_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+
+        # Handle different checkpoint formats
+        if "model_state_dict" in checkpoint:
+            # If checkpoint contains nested state dict
+            if isinstance(checkpoint["model_state_dict"], str):
+                # If it's a path, load from that path
+                state_dict = torch.load(
+                    checkpoint["model_state_dict"], map_location="cpu"
+                )["state_dict"]
+            else:
+                # If it's already the state dict
+                state_dict = checkpoint["model_state_dict"]
+                if "state_dict" in state_dict:
+                    state_dict = state_dict["state_dict"]
+        else:
+            # Direct state dict in checkpoint
+            state_dict = checkpoint
+
+        self.model.load_state_dict(state_dict)
 
         self.model.to(self.device)
         self.model.eval()
-        print("model loaded")
+        print("PyTorch model loaded")
+
+        # Export and setup ONNX if requested
+        if self.use_onnx:
+            self._setup_onnx_model()
+
+        print("Model initialization completed")
+
+    def _setup_onnx_model(self):
+        """Setup ONNX model for optimized inference"""
+        try:
+            if not os.path.exists(self.onnx_model_path):
+                print("Exporting model to ONNX format...")
+                self._export_to_onnx()
+
+            print("Loading ONNX model...")
+            providers = ["CPUExecutionProvider"]
+            if self.device.type == "cuda":
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+            self.onnx_session = ort.InferenceSession(
+                self.onnx_model_path, providers=providers
+            )
+            print("ONNX model loaded successfully")
+
+        except Exception as e:
+            print(f"Failed to setup ONNX model: {e}")
+            print("Falling back to PyTorch model")
+            self.use_onnx = False
+            self.onnx_session = None
+
+    def _export_to_onnx(self):
+        """Export PyTorch model to ONNX format"""
+        # Create sample inputs for ONNX export
+        sample_text = "ಹಲೋ ವರ್ಲ್ಡ್"  # Sample Kannada text
+        sample_inputs = self.tokenizer(
+            sample_text,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=128,
+        )
+
+        src_ids = sample_inputs.input_ids.to(self.device)
+        # Create dummy target input for decoder
+        tgt_ids = torch.tensor([[self.tokenizer.bos_token_id]], device=self.device)
+
+        # Export to ONNX
+        torch.onnx.export(
+            self.model,
+            (src_ids, tgt_ids),
+            self.onnx_model_path,
+            export_params=True,
+            opset_version=15,
+            input_names=["src_ids", "tgt_ids"],
+            output_names=["logits"],
+            dynamic_axes={
+                "src_ids": {0: "batch_size", 1: "src_seq_len"},
+                "tgt_ids": {0: "batch_size", 1: "tgt_seq_len"},
+                "logits": {0: "batch_size", 1: "tgt_seq_len"},
+            },
+            do_constant_folding=True,
+        )
+        print(f"Model exported to {self.onnx_model_path}")
 
     @torch.no_grad()
     def translate(self, text: str, max_length: int = 128, **kwargs):
         """
-        Beam search optimization for inference ? 
+        Translate text using either ONNX or PyTorch model
         """
+        if self.use_onnx and self.onnx_session is not None:
+            return self._translate_onnx(text, max_length)
+        else:
+            return self._translate_pytorch(text, max_length)
+
+    def _translate_pytorch(self, text: str, max_length: int = 128):
+        """Translate using PyTorch model"""
         self.model.eval()
 
         inputs = self.tokenizer(
@@ -299,7 +399,44 @@ class TranslationInference:
             input_ids, self.tokenizer, max_new_tokens=max_length
         )
         translation = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
         return translation
 
+    def _translate_onnx(self, text: str, max_length: int = 128):
+        """Translate using ONNX model with greedy decoding"""
+        inputs = self.tokenizer(
+            text,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+        )
+        src_ids = inputs.input_ids.numpy().astype(np.int64)
 
+        # Initialize decoder with BOS token
+        decoder_input_ids = np.array([[self.tokenizer.bos_token_id]], dtype=np.int64)
+
+        # Greedy decoding
+        for _ in range(max_length):
+            # Run ONNX inference
+            onnx_inputs = {"src_ids": src_ids, "tgt_ids": decoder_input_ids}
+
+            logits = self.onnx_session.run(["logits"], onnx_inputs)[0]
+
+            # Get next token (greedy)
+            next_token_id = np.argmax(logits[0, -1, :]).astype(np.int64)
+
+            # Stop if EOS token
+            if next_token_id == self.tokenizer.eos_token_id:
+                break
+
+            # Append next token
+            decoder_input_ids = np.concatenate(
+                [decoder_input_ids, [[next_token_id]]], axis=1
+            )
+
+        # Decode to text
+        translation = self.tokenizer.decode(
+            decoder_input_ids[0], skip_special_tokens=True
+        )
+        return translation
+                

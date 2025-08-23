@@ -44,6 +44,10 @@ function App() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
   
+    //  translation request start time
+    const startTime = Date.now();
+    console.log(`Translation request started at: ${new Date(startTime).toISOString()}`);
+  
     try {
       const response = await fetch(`${API_BASE_URL}/translate/text`, {
         method: 'POST',
@@ -60,6 +64,12 @@ function App() {
       clearTimeout(timeoutId); 
       const data = await response.json();
       
+      // logging translation request end time and duration
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.log(` Translation response received at: ${new Date(endTime).toISOString()}`);
+      console.log(`⏱Translation request duration: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+      
       if (data.success) {
         setTranslation(data);
       } else {
@@ -67,11 +77,12 @@ function App() {
       }
     } catch (err) {
       clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        setError('inference taking too long .... .');
-      } else {
-        setError('network error');
-      }
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.log(`Translation request failed at: ${new Date(endTime).toISOString()}`);
+      console.log(` Translation request duration (failed): ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+
     } finally {
       setLoading(false);
     }
