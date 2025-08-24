@@ -27,9 +27,7 @@ async def lifespan(app: FastAPI):
     global translator
     try:
         print("hf hub loading...")
-        translator = TranslationInference(
-            repo_id=REPO_ID, device=DEVICE, use_onnx=True 
-        )
+        translator = TranslationInference(repo_id=REPO_ID, device=DEVICE, use_onnx=True)
         print("translation model loaded")
     except Exception as e:
         print(f"error loading model: {e}")
@@ -44,7 +42,7 @@ app = FastAPI(title="Translation api", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
+        # "http://localhost:3000",
         "https://kn-en-translation.vercel.app",
         "https://kn-en-translation-ca804k53s-dhruvabantwalrao-gmailcoms-projects.vercel.app",
         "https://*.vercel.app",
@@ -100,7 +98,7 @@ async def translate_text(request: TextTranslationRequest):
             text=request.text, max_length=request.max_length
         )
 
-    # log translation completion time 
+    # log translation completion time
     end_time = time.time()
     end_datetime = datetime.now()
     duration = end_time - start_time
@@ -113,5 +111,5 @@ async def translate_text(request: TextTranslationRequest):
     )
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+# if __name__ == "__main__":
+#     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

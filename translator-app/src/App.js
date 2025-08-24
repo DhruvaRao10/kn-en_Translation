@@ -68,7 +68,7 @@ function App() {
       const endTime = Date.now();
       const duration = endTime - startTime;
       console.log(` Translation response received at: ${new Date(endTime).toISOString()}`);
-      console.log(`⏱Translation request duration: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+      console.log(`Translation request duration: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
       
       if (data.success) {
         setTranslation(data);
